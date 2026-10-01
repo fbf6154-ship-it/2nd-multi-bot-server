@@ -4,7 +4,7 @@
   "description": "Universal Multi-Bot Hosting Platform (Node.js & Python)",
   "main": "server.js",
   "scripts": {
-    "postinstall": "pip3 install python-telegram-bot httpx pyotp || pip install python-telegram-bot httpx pyotp",
+    "postinstall": "pip3 install --break-system-packages python-telegram-bot httpx pyotp || pip install --break-system-packages python-telegram-bot httpx pyotp",
     "start": "node server.js"
   },
   "dependencies": {
