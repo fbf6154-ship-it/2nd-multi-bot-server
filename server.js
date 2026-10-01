@@ -1,256 +1,203 @@
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
+const DB_FILE = path.join(__dirname, 'database.json');
+const BOTS_DIR = path.join(__dirname, 'uploaded_bots');
 
-// ফোল্ডার ও ডাটাবেজ পাথ
-const BOTS_DIR = path.join(__dirname, 'bots_storage');
-const DB_FILE = path.join(__dirname, 'bots_db.json');
+if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR);
+if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, '[]');
 
-// ডিরেক্টরি নিশ্চিত করা
-if (!fs.existsSync(BOTS_DIR)) {
-    fs.mkdirSync(BOTS_DIR, { recursive: true });
-}
+app.use(cors());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 
-// ডাটাবেজ হ্যান্ডলার
-function getBotsDB() {
-    if (!fs.existsSync(DB_FILE)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify([]));
-        return [];
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, BOTS_DIR),
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname);
+        const cleanName = Date.now() + '-' + path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_') + ext;
+        cb(null, cleanName);
     }
+});
+const upload = multer({ storage });
+
+const runningProcesses = new Map();
+
+function getBots() {
     try {
-        return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
-    } catch (e) {
+        return JSON.parse(fs.readFileSync(DB_FILE));
+    } catch {
         return [];
     }
 }
 
-function saveBotsDB(data) {
+function saveBots(data) {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-// রানিং প্রসেস ট্র্যাকার
-const runningProcesses = {};
-
-// বট রান করার ফাংশন (Crash Proof Supervisor)
-function startBotProcess(bot) {
-    // আগের রানিং প্রসেস বন্ধ করা
-    if (runningProcesses[bot.id]) {
-        try {
-            runningProcesses[bot.id].kill('SIGKILL');
-        } catch (e) {}
-        delete runningProcesses[bot.id];
+// ইউনিভার্সাল বট লঞ্চার
+function launchBot(bot) {
+    if (runningProcesses.has(bot.id)) {
+        try { runningProcesses.get(bot.id).kill(); } catch (e) {}
     }
 
+    console.log(`[STARTING] ${bot.name} (${bot.filename}) চালু করা হচ্ছে...`);
     const filePath = path.join(BOTS_DIR, bot.filename);
+
     if (!fs.existsSync(filePath)) {
-        console.error(`[Error] বট ফাইল পাওয়া যায়নি: ${filePath}`);
-        return false;
+        console.error(`[ERROR] ফাইল পাওয়া যায়নি: ${bot.filename}`);
+        return;
     }
 
-    const env = {
-        ...process.env,
-        BOT_TOKEN: bot.token,
-        PYTHONUNBUFFERED: "1"
-    };
+    let runner = bot.filename.endsWith('.py') ? 'python3' : 'node';
 
-    let cmd = 'node';
-    let args = [filePath];
+    const processInstance = spawn(runner, [filePath], {
+        env: { ...process.env, BOT_TOKEN: bot.token }
+    });
 
-    if (bot.type === 'python') {
-        cmd = 'python3';
-        args = [filePath];
-    }
+    runningProcesses.set(bot.id, processInstance);
 
-    console.log(`\n==============================================`);
-    console.log(`🚀 [Starting Bot] Name: ${bot.name} | Type: ${bot.type}`);
-    console.log(`📁 File: ${bot.filename}`);
-    console.log(`==============================================\n`);
+    processInstance.stdout.on('data', (data) => console.log(`[${bot.name}]: ${data.toString()}`));
+    processInstance.stderr.on('data', (data) => console.error(`[${bot.name} ERROR]: ${data.toString()}`));
 
-    try {
-        const proc = spawn(cmd, args, {
-            env: env,
-            cwd: BOTS_DIR,
-            stdio: ['pipe', 'pipe', 'pipe']
-        });
-
-        proc.stdout.on('data', (data) => {
-            console.log(`[Bot Output: ${bot.name}] ${data.toString().trim()}`);
-        });
-
-        proc.stderr.on('data', (data) => {
-            console.error(`[Bot Error: ${bot.name}] ${data.toString().trim()}`);
-        });
-
-        proc.on('close', (code) => {
-            console.log(`⚠️ [Bot Closed] ${bot.name} exited with code: ${code}`);
-            delete runningProcesses[bot.id];
-        });
-
-        proc.on('error', (err) => {
-            console.error(`❌ [Spawn Error] ${bot.name}:`, err.message);
-        });
-
-        runningProcesses[bot.id] = proc;
-        return true;
-    } catch (err) {
-        console.error(`❌ [Start Exception] ${bot.name}:`, err);
-        return false;
-    }
+    processInstance.on('close', (code) => {
+        console.log(`[${bot.name}] বন্ধ হয়েছিল! ৫ সেকেন্ড পর রিস্টার্ট হচ্ছে...`);
+        setTimeout(() => {
+            const bots = getBots();
+            const exists = bots.find(b => b.id === bot.id);
+            if (exists) launchBot(bot);
+        }, 5000);
+    });
 }
 
-// মিডলওয়্যার কনফিগ
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+// UptimeRobot Keep-Alive
+app.get('/ping', (req, res) => res.send('Active 24/7!'));
 
-// মুল্টার ফাইল আপলোড কনফিগ
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
-
-// ================= API ENDPOINTS =================
-
-// ১. রানিং বট তালিকা
+// চলমান সব বটের লিস্ট
 app.get('/api/bots', (req, res) => {
-    const bots = getBotsDB();
+    const bots = getBots().map(b => ({
+        id: b.id,
+        name: b.name,
+        filename: b.filename,
+        token: b.token,
+        createdAt: b.createdAt,
+        type: b.filename.endsWith('.py') ? 'Python' : 'Node.js',
+        status: runningProcesses.has(b.id) ? 'Active' : 'Restarting'
+    }));
     res.json(bots);
 });
 
-// ২. সিঙ্গেল বটের তথ্য ও সোর্স কোড
+// নির্দিষ্ট একটি বটের সম্পূর্ণ ডাটা ও কোড পাওয়ার API
 app.get('/api/bots/:id', (req, res) => {
-    const bots = getBotsDB();
-    const bot = bots.find(b => b.id === req.params.id);
-    if (!bot) return res.status(404).json({ error: 'বটটি পাওয়া যায়নি!' });
+    const bot = getBots().find(b => b.id === req.params.id);
+    if (!bot) return res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
 
     const filePath = path.join(BOTS_DIR, bot.filename);
     let code = '';
     if (fs.existsSync(filePath)) {
-        code = fs.readFileSync(filePath, 'utf8');
+        code = fs.readFileSync(filePath, 'utf-8');
     }
-    res.json({ ...bot, code });
-});
 
-// ৩. নতুন বট আপলোড ও ইনস্ট্যান্ট রান
-app.post('/api/upload', upload.single('botFile'), (req, res) => {
-    try {
-        const { botName, botToken, botCode, codeType } = req.body;
-        if (!botName || !botToken) {
-            return res.status(400).json({ error: 'বটের নাম এবং API টোকেন দেওয়া বাধ্যতামূলক!' });
-        }
-
-        const id = 'bot_' + Date.now();
-        const ext = codeType === 'javascript' ? '.js' : '.py';
-        const filename = `${id}${ext}`;
-        const filePath = path.join(BOTS_DIR, filename);
-
-        let finalCode = '';
-        if (req.file) {
-            finalCode = req.file.buffer.toString('utf8');
-        } else if (botCode && botCode.trim()) {
-            finalCode = botCode.trim();
-        } else {
-            return res.status(400).json({ error: 'কোনো কোড পেস্ট বা ফাইল সিলেক্ট করা হয়নি!' });
-        }
-
-        fs.writeFileSync(filePath, finalCode, 'utf8');
-
-        const newBot = {
-            id: id,
-            name: botName.trim(),
-            token: botToken.trim(),
-            type: codeType === 'javascript' ? 'nodejs' : 'python',
-            filename: filename,
-            createdAt: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })
-        };
-
-        const bots = getBotsDB();
-        bots.push(newBot);
-        saveBotsDB(bots);
-
-        startBotProcess(newBot);
-
-        res.json({ success: true, message: 'বট সফলভাবে ডেপ্লয় ও লাইভ চালু হয়েছে!' });
-    } catch (e) {
-        console.error('Upload Error:', e);
-        res.status(500).json({ error: 'বট আপলোডে সমস্যা: ' + e.message });
-    }
-});
-
-// ৪. লাইভ এডিট ও রিস্টার্ট
-app.post('/api/bots/:id/edit', (req, res) => {
-    try {
-        const { botName, botToken, botCode } = req.body;
-        const bots = getBotsDB();
-        const index = bots.findIndex(b => b.id === req.params.id);
-
-        if (index === -1) {
-            return res.status(404).json({ error: 'বটটি পাওয়া যায়নি!' });
-        }
-
-        const bot = bots[index];
-        bot.name = botName || bot.name;
-        bot.token = botToken || bot.token;
-
-        const filePath = path.join(BOTS_DIR, bot.filename);
-        fs.writeFileSync(filePath, botCode, 'utf8');
-
-        saveBotsDB(bots);
-        startBotProcess(bot);
-
-        res.json({ success: true, message: 'বটের কোড আপডেট ও রিস্টার্ট সফল হয়েছে!' });
-    } catch (e) {
-        res.status(500).json({ error: 'আপডেটে সমস্যা: ' + e.message });
-    }
-});
-
-// ৫. বট সম্পূর্ণ ডিলিট ও কিল করা
-app.delete('/api/bots/:id', (req, res) => {
-    try {
-        let bots = getBotsDB();
-        const bot = bots.find(b => b.id === req.params.id);
-
-        if (bot) {
-            if (runningProcesses[bot.id]) {
-                try {
-                    runningProcesses[bot.id].kill('SIGKILL');
-                } catch (e) {}
-                delete runningProcesses[bot.id];
-            }
-
-            const filePath = path.join(BOTS_DIR, bot.filename);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-
-            bots = bots.filter(b => b.id !== req.params.id);
-            saveBotsDB(bots);
-        }
-
-        res.json({ success: true, message: 'বটটি ডিলিট ও বন্ধ করা হয়েছে!' });
-    } catch (e) {
-        res.status(500).json({ error: 'ডিলিট করতে সমস্যা: ' + e.message });
-    }
-});
-
-// সার্ভার স্টার্ট হলে আগের সব বট পুনরায় চালু
-function restartAllBots() {
-    const bots = getBotsDB();
-    console.log(`[Auto-Start] সিস্টেমে পূর্বে থাকা ${bots.length}টি বট চালু করা হচ্ছে...`);
-    bots.forEach(bot => {
-        startBotProcess(bot);
+    res.json({
+        id: bot.id,
+        name: bot.name,
+        token: bot.token,
+        filename: bot.filename,
+        code: code
     });
-}
+});
 
-// এক্সপ্রেস সার্ভার লিসেন
+// নতুন বট আপলোড
+app.post('/api/upload', upload.single('botFile'), (req, res) => {
+    const { botName, botToken, botCode, codeType } = req.body;
+    let filename = '';
+
+    if (req.file) {
+        filename = req.file.filename;
+    } else if (botCode && botCode.trim() !== '') {
+        const ext = codeType === 'python' ? '.py' : '.js';
+        filename = Date.now() + '-bot' + ext;
+        fs.writeFileSync(path.join(BOTS_DIR, filename), botCode);
+    } else {
+        return res.status(400).json({ error: 'ফাইল আপলোড করুন অথবা কোড লিখুন!' });
+    }
+
+    if (!botName || !botToken) {
+        return res.status(400).json({ error: 'বটের নাম ও টোকেন আবশ্যক!' });
+    }
+
+    const newBot = {
+        id: Date.now().toString(),
+        name: botName.trim(),
+        token: botToken.trim(),
+        filename: filename,
+        createdAt: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })
+    };
+
+    const bots = getBots();
+    bots.push(newBot);
+    saveBots(bots);
+
+    launchBot(newBot);
+
+    res.json({ success: true, message: `${botName} সফলভাবে লাইভ হয়েছে!` });
+});
+
+// রানিং বটের কোড এবং টোকেন এডিট ও সাথে সাথে রিস্টার্ট করার API
+app.post('/api/bots/:id/edit', (req, res) => {
+    const { botName, botToken, botCode } = req.body;
+    const { id } = req.params;
+
+    let bots = getBots();
+    const index = bots.findIndex(b => b.id === id);
+
+    if (index === -1) return res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
+
+    // তথ্য আপডেট করা
+    bots[index].name = botName.trim();
+    bots[index].token = botToken.trim();
+    saveBots(bots);
+
+    // কোড ফাইল ওভাররাইট করা
+    const filePath = path.join(BOTS_DIR, bots[index].filename);
+    fs.writeFileSync(filePath, botCode, 'utf-8');
+
+    // নতুন কোড ও টোকেন দিয়ে তৎক্ষণাৎ রিস্টার্ট দেওয়া
+    launchBot(bots[index]);
+
+    res.json({ success: true, message: 'বট সফলভাবে আপডেট ও নতুন করে রান হয়েছে!' });
+});
+
+// বট ডিলিট
+app.delete('/api/bots/:id', (req, res) => {
+    const { id } = req.params;
+    let bots = getBots();
+    const bot = bots.find(b => b.id === id);
+
+    if (bot) {
+        if (runningProcesses.has(id)) {
+            runningProcesses.get(id).kill();
+            runningProcesses.delete(id);
+        }
+        const filePath = path.join(BOTS_DIR, bot.filename);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+        bots = bots.filter(b => b.id !== id);
+        saveBots(bots);
+        return res.json({ success: true });
+    }
+    res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
+});
+
 app.listen(PORT, () => {
-    console.log(`\n==============================================`);
-    console.log(`🚀 ইউনিভার্সাল মাল্টি-বট ক্লাউড সার্ভার সক্রিয়! পোর্ট: ${PORT}`);
-    console.log(`==============================================\n`);
-    restartAllBots();
+    console.log(`🚀 ইউনিভার্সাল এডিটেবল সার্ভার চালু হয়েছে পোর্ট: ${PORT}`);
+    const bots = getBots();
+    bots.forEach(bot => launchBot(bot));
 });
