@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="bn" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Multi-Bot Cloud Platform & Live Studio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'Hind Siliguri', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+            background-color: #080d1a;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glow-border:focus-within {
+            box-shadow: 0 0 15px -3px rgba(14, 165, 233, 0.4);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.2);
+            border-radius: 9999px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.4);
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen relative overflow-x-hidden selection:bg-sky-500 selection:text-white">
+
+    <!-- Glowing Background Blobs -->
+    <div class="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-sky-600/15 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/15 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+
+    <!-- ==================== 1. LOGIN SCREEN ==================== -->
+    <div id="loginSection" class="min-h-screen flex items-center justify-center p-4 relative z-20">
+        <div class="w-full max-w-md glass-panel p-8 rounded-3xl shadow-2xl border border-slate-700/50 relative overflow-hidden">
+            <!-- Top bar indicator -->
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-400"></div>
+
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 mx-auto bg-gradient-to-tr from-sky-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-500/20 mb-4 ring-4 ring-sky-500/10">
+                    <i class="fa-solid fa-shield-halved text-2xl text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold tracking-tight text-white">এডমিন প্যানেল লগইন</h2>
+                <p class="text-xs text-slate-400 mt-1.5 font-medium">বট হোস্টিং ও ম্যানেজমেন্ট প্যানেল অ্যাক্সেস করতে লগইন করুন</p>
+            </div>
+
+            <form id="loginForm" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">ইমেইল এড্রেস</label>
+                    <div class="relative flex items-center glow-border rounded-xl">
+                        <span class="absolute left-3.5 text-slate-500 text-sm"><i class="fa-regular fa-envelope"></i></span>
+                        <input type="email" id="loginEmail" placeholder="admin@fahim.com" required
+                               class="w-full bg-slate-900/90 border border-slate-700/70 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">পাসওয়ার্ড</label>
+                    <div class="relative flex items-center glow-border rounded-xl">
+                        <span class="absolute left-3.5 text-slate-500 text-sm"><i class="fa-solid fa-lock"></i></span>
+                        <input type="password" id="loginPassword" placeholder="••••••••••••" required
+                               class="w-full bg-slate-900/90 border border-slate-700/70 rounded-xl pl-10 pr-10 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                        <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3.5 text-slate-500 hover:text-slate-300 text-sm">
+                            <i id="passwordToggleIcon" class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="loginError" class="hidden p-3 bg-rose-950/60 border border-rose-800/80 rounded-xl text-xs text-rose-400 text-center font-medium flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span id="loginErrorText">ইমেইল বা পাসওয়ার্ড সঠিক নয়!</span>
+                </div>
+
+                <button type="submit" id="loginBtn"
+                        class="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl text-sm transition duration-200 shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2 group">
+                    <span>লগইন করুন</span>
+                    <i class="fa-solid fa-arrow-right text-xs group-hover:translate-x-1 transition-transform"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ==================== 2. MAIN DASHBOARD ==================== -->
+    <div id="dashboardSection" class="hidden min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+
+        <!-- Top Header Navigation -->
+        <header class="glass-panel p-4 md:p-5 rounded-3xl border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 text-white text-xl">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                        Universal Bot Cloud <span class="text-xs bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-mono font-medium">v2.0 Live</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Node.js & Python 24/7 মাল্টি-বট হোস্টিং ও লাইভ স্টুডিও</p>
+                </div>
+            </div>
+
+            <!-- Server Status & Admin Info -->
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 px-3.5 py-2 rounded-2xl text-xs font-semibold">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    সার্ভার রানিং
+                </div>
+
+                <div class="flex items-center gap-2 bg-slate-800/80 border border-slate-700/60 px-3 py-1.5 rounded-2xl">
+                    <div class="w-7 h-7 bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-full flex items-center justify-center text-xs font-bold">
+                        F
+                    </div>
+                    <span class="text-xs font-semibold text-slate-300 hidden sm:inline">admin@fahim.com</span>
+                    <button onclick="handleLogout()" class="text-slate-400 hover:text-rose-400 ml-1 p-1 transition" title="লগআউট করুন">
+                        <i class="fa-solid fa-power-off text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace Grid -->
+        <div class="grid lg:grid-cols-12 gap-6">
+
+            <!-- Left Panel: Deploy New Bot (5 Cols) -->
+            <div class="lg:col-span-5 glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl space-y-5">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-4">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-cloud-arrow-up text-sky-400"></i> নতুন বট ডিপ্লয় করুন
+                    </h2>
+                    <span class="text-[11px] bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700">Auto-Start</span>
+                </div>
+
+                <form id="uploadForm" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">বটের নাম (Bot Name)</label>
+                        <input type="text" id="botName" placeholder="যেমন: OTP Guru Bot" required
+                               class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">টেলিগ্রাম API টোকেন (Bot Token)</label>
+                        <input type="text" id="botToken" placeholder="BotFather থেকে পাওয়া টোকেন দিন" required
+                               class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 font-mono focus:outline-none focus:border-sky-500 transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">বটের স্ক্রিপ্ট ফাইল (.py বা .js)</label>
+                        <input type="file" id="botFile" accept=".py, .js"
+                               class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-sky-500 file:text-white hover:file:bg-sky-400 transition cursor-pointer">
+                    </div>
+
+                    <div class="relative flex py-1 items-center">
+                        <div class="flex-grow border-t border-slate-800"></div>
+                        <span class="flex-shrink mx-3 text-[11px] uppercase font-semibold text-slate-500">অথবা সরাসরি কোড লিখুন</span>
+                        <div class="flex-grow border-t border-slate-800"></div>
+                    </div>
+
+                    <!-- Language Switcher -->
+                    <div class="flex gap-4 p-1.5 bg-slate-900/80 rounded-xl border border-slate-800">
+                        <label class="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer has-[:checked]:bg-sky-500/20 has-[:checked]:text-sky-400 has-[:checked]:border has-[:checked]:border-sky-500/30 transition text-slate-400">
+                            <input type="radio" name="codeType" value="python" class="hidden" checked>
+                            <i class="fa-brands fa-python text-sm"></i> Python (.py)
+                        </label>
+                        <label class="flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-semibold cursor-pointer has-[:checked]:bg-sky-500/20 has-[:checked]:text-sky-400 has-[:checked]:border has-[:checked]:border-sky-500/30 transition text-slate-400">
+                            <input type="radio" name="codeType" value="javascript" class="hidden">
+                            <i class="fa-brands fa-node-js text-sm"></i> Node.js (.js)
+                        </label>
+                    </div>
+
+                    <div>
+                        <textarea id="botCode" rows="4" placeholder="# এখানে পাইথন বা জাভাস্ক্রিপ্ট সোর্স কোড পেস্ট করুন..."
+                                  class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-sky-500 transition leading-relaxed custom-scrollbar"></textarea>
+                    </div>
+
+                    <button type="submit" id="submitBtn"
+                            class="w-full bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold py-3 rounded-xl text-sm transition shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-bolt"></i> হোস্ট ও রান করুন
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right Panel: Running Bots Monitor (7 Cols) -->
+            <div class="lg:col-span-7 glass-panel p-6 rounded-3xl border border-slate-800 shadow-xl flex flex-col justify-between space-y-4">
+                <div>
+                    <div class="flex items-center justify-between border-b border-slate-800/80 pb-4 mb-4">
+                        <h2 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-server text-emerald-400"></i> চলমান বটসমূহ
+                        </h2>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">মোট সক্রিয়:</span>
+                            <span id="botCount" class="text-xs font-mono bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2.5 py-0.5 rounded-full font-bold">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Bots List Area -->
+                    <div id="botsContainer" class="space-y-3 max-h-[500px] overflow-y-auto pr-1.5 custom-scrollbar">
+                        <div class="flex flex-col items-center justify-center py-16 text-slate-500 space-y-2">
+                            <i class="fa-solid fa-spinner animate-spin text-2xl text-sky-500"></i>
+                            <span class="text-xs font-medium">ডাটা লোড হচ্ছে...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-slate-900/60 rounded-2xl border border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
+                    <span class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-circle-info text-sky-400"></i> অটো রিফ্রেশ ও হেলথ-চেক সক্রিয়
+                    </span>
+                    <button onclick="loadBots()" class="text-sky-400 hover:underline flex items-center gap-1">
+                        <i class="fa-solid fa-arrows-rotate"></i> রিফ্রেশ
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ==================== 3. LIVE CODE EDITOR MODAL ==================== -->
+    <div id="editModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden items-center justify-center p-4 z-50 transition-all duration-300">
+        <div class="glass-panel bg-slate-900/95 border border-slate-700/80 rounded-3xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+            
+            <!-- Modal Header -->
+            <div class="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                        <i class="fa-solid fa-code"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-sm">লাইভ স্টুডিও কোড এডিটর</h3>
+                        <p class="text-[11px] text-slate-400">কোড বা টোকেন পরিবর্তন করে সাথে সাথে রিস্টার্ট দিন</p>
+                    </div>
+                </div>
+                <button onclick="closeEditModal()" class="w-8 h-8 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition flex items-center justify-center text-sm">✕</button>
+            </div>
+
+            <!-- Modal Form -->
+            <form id="editForm" class="p-5 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
+                <input type="hidden" id="editBotId">
+
+                <div class="grid sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">বটের নাম</label>
+                        <input type="text" id="editBotName" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">বট API টোকেন</label>
+                        <input type="text" id="editBotToken" required
+                               class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-white font-mono focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-code text-sky-400"></i> মূল সোর্স কোড (Editor)
+                        </label>
+                        <span id="editBotFilename" class="text-[11px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800 px-2 py-0.5 rounded"></span>
+                    </div>
+                    <textarea id="editBotCode" rows="13" required
+                              class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-xs font-mono text-emerald-400 focus:outline-none focus:border-sky-500 leading-relaxed custom-scrollbar"></textarea>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" id="saveEditBtn"
+                            class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-bold py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20">
+                        <i class="fa-solid fa-arrows-rotate"></i> পরিবর্তন সেভ ও রিস্টার্ট করুন
+                    </button>
+                    <button type="button" onclick="closeEditModal()"
+                            class="px-5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-semibold transition">
+                        বাতিল
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold border pointer-events-none">
+    </div>
+
+    <!-- ==================== SCRIPT LOGIC ==================== -->
+    <script>
+        // Authentication Credentials
+        const AUTH_CONFIG = {
+            email: "admin@fahim.com",
+            pass: "fahimaisebot",
+            tokenKey: "fahim_bot_session"
+        };
+
+        // Toast Helper
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            if (type === 'success') {
+                toast.className = 'fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold border bg-emerald-950/90 border-emerald-600 text-emerald-300 translate-y-0 opacity-100 transition-all duration-300';
+                toast.innerHTML = `<i class="fa-solid fa-circle-check text-base"></i> ${message}`;
+            } else {
+                toast.className = 'fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-xs font-semibold border bg-rose-950/90 border-rose-600 text-rose-300 translate-y-0 opacity-100 transition-all duration-300';
+                toast.innerHTML = `<i class="fa-solid fa-circle-exclamation text-base"></i> ${message}`;
+            }
+
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+
+        // Check Login Session
+        function checkAuth() {
+            const session = localStorage.getItem(AUTH_CONFIG.tokenKey);
+            if (session === 'authenticated') {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('dashboardSection').classList.remove('hidden');
+                loadBots();
+            } else {
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('dashboardSection').classList.add('hidden');
+            }
+        }
+
+        // Login Handler
+        document.getElementById('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const pass = document.getElementById('loginPassword').value.trim();
+            const errDiv = document.getElementById('loginError');
+
+            if (email === AUTH_CONFIG.email && pass === AUTH_CONFIG.pass) {
+                localStorage.setItem(AUTH_CONFIG.tokenKey, 'authenticated');
+                errDiv.classList.add('hidden');
+                showToast('এডমিন লগইন সফল হয়েছে!');
+                checkAuth();
+            } else {
+                errDiv.classList.remove('hidden');
+            }
+        });
+
+        // Toggle Password Visibility
+        function togglePasswordVisibility() {
+            const passInput = document.getElementById('loginPassword');
+            const icon = document.getElementById('passwordToggleIcon');
+            if (passInput.type === 'password') {
+                passInput.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                passInput.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        // Logout Handler
+        function handleLogout() {
+            if (confirm('আপনি কি নিশ্চিত যে প্যানেল থেকে লগআউট করতে চান?')) {
+                localStorage.removeItem(AUTH_CONFIG.tokenKey);
+                showToast('লগআউট সফল হয়েছে');
+                checkAuth();
+            }
+        }
+
+        // Load Bots List
+        async function loadBots() {
+            try {
+                const res = await fetch('/api/bots');
+                const bots = await res.json();
+                const container = document.getElementById('botsContainer');
+                document.getElementById('botCount').innerText = bots.length;
+
+                if (!bots || bots.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-16 px-4 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800">
+                            <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-slate-800 flex items-center justify-center text-slate-500">
+                                <i class="fa-solid fa-box-open text-xl"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-slate-300">কোনো রানিং বট পাওয়া যায়নি</p>
+                            <p class="text-xs text-slate-500 mt-1">বামপাশের ফর্ম থেকে নতুন বট ফাইল বা কোড ডিপ্লয় করুন।</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = bots.map(b => `
+                    <div class="group bg-slate-900/80 hover:bg-slate-900 p-4 rounded-2xl border border-slate-800/80 hover:border-slate-700/80 transition shadow-sm flex items-center justify-between">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-10 h-10 rounded-xl ${b.type === 'python' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'} flex items-center justify-center text-base font-bold">
+                                <i class="${b.type === 'python' ? 'fa-brands fa-python' : 'fa-brands fa-node-js'}"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                                    ${b.name}
+                                    <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full font-semibold ${b.type === 'python' ? 'bg-amber-950/60 text-amber-400 border border-amber-800' : 'bg-emerald-950/60 text-emerald-400 border border-emerald-800'}">${b.type}</span>
+                                </div>
+                                <div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                    <span>${b.createdAt || 'Active Now'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="openEditModal('${b.id}')" class="w-9 h-9 rounded-xl bg-slate-800 text-sky-400 hover:bg-sky-500 hover:text-slate-950 transition flex items-center justify-center text-xs" title="লাইভ কোড ও টোকেন এডিটর">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onclick="deleteBot('${b.id}')" class="w-9 h-9 rounded-xl bg-slate-800 text-rose-400 hover:bg-rose-500 hover:text-white transition flex items-center justify-center text-xs" title="বট বন্ধ ও ডিলিট">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error("Load bots error:", err);
+            }
+        }
+
+        // Upload Bot
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ডিপ্লয় হচ্ছে...';
+
+            const formData = new FormData();
+            formData.append('botName', document.getElementById('botName').value);
+            formData.append('botToken', document.getElementById('botToken').value);
+            
+            const file = document.getElementById('botFile').files[0];
+            if (file) formData.append('botFile', file);
+            formData.append('botCode', document.getElementById('botCode').value);
+            formData.append('codeType', document.querySelector('input[name="codeType"]:checked').value);
+
+            try {
+                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const result = await res.json();
+
+                if (result.success) {
+                    showToast(result.message || 'বট সফলভাবে চালু হয়েছে!');
+                    document.getElementById('uploadForm').reset();
+                    loadBots();
+                } else {
+                    showToast(result.error || 'বট রান করতে সমস্যা হয়েছে!', 'error');
+                }
+            } catch (err) {
+                showToast('সার্ভারের সাথে সংযোগ বিচ্ছিন্ন হয়েছে!', 'error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-bolt"></i> হোস্ট ও রান করুন';
+        });
+
+        // Open Live Edit Modal
+        async function openEditModal(id) {
+            try {
+                const res = await fetch('/api/bots/' + id);
+                const bot = await res.json();
+
+                if (bot.error) {
+                    showToast(bot.error, 'error');
+                    return;
+                }
+
+                document.getElementById('editBotId').value = bot.id;
+                document.getElementById('editBotName').value = bot.name;
+                document.getElementById('editBotToken').value = bot.token;
+                document.getElementById('editBotFilename').innerText = bot.filename || 'script.py';
+                document.getElementById('editBotCode').value = bot.code;
+
+                const modal = document.getElementById('editModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } catch (err) {
+                showToast('বটের ডাটা আনতে সমস্যা হয়েছে', 'error');
+            }
+        }
+
+        function closeEditModal() {
+            const modal = document.getElementById('editModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Save Edit Changes
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editBotId').value;
+            const btn = document.getElementById('saveEditBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> সেভ ও রিস্টার্ট হচ্ছে...';
+
+            const payload = {
+                botName: document.getElementById('editBotName').value,
+                botToken: document.getElementById('editBotToken').value,
+                botCode: document.getElementById('editBotCode').value
+            };
+
+            try {
+                const res = await fetch('/api/bots/' + id + '/edit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    showToast(result.message || 'বটের কোড সফলভাবে আপডেট হয়েছে!');
+                    closeEditModal();
+                    loadBots();
+                } else {
+                    showToast(result.error || 'আপডেট করতে সমস্যা হয়েছে!', 'error');
+                }
+            } catch (err) {
+                showToast('সার্ভার রেসপন্স করছে না!', 'error');
+            }
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> পরিবর্তন সেভ ও রিস্টার্ট করুন';
+        });
+
+        // Delete Bot
+        async function deleteBot(id) {
+            if (!confirm('আপনি কি নিশ্চিত যে এই বটটি চিরতরে বন্ধ ও ডিলিট করতে চান?')) return;
+            try {
+                const res = await fetch('/api/bots/' + id, { method: 'DELETE' });
+                const result = await res.json();
+                showToast(result.message || 'বটটি ডিলিট করা হয়েছে');
+                loadBots();
+            } catch (err) {
+                showToast('ডিলিট করতে সমস্যা হয়েছে', 'error');
+            }
+        }
+
+        // Initialize & Auto Polling
+        checkAuth();
+        setInterval(() => {
+            if (localStorage.getItem(AUTH_CONFIG.tokenKey) === 'authenticated') {
+                loadBots();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>
