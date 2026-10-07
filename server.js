@@ -1,203 +1,223 @@
 const express = require('express');
 const multer = require('multer');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const DB_FILE = path.join(__dirname, 'database.json');
-const BOTS_DIR = path.join(__dirname, 'uploaded_bots');
-
-if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR);
-if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, '[]');
 
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, BOTS_DIR),
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname);
-        const cleanName = Date.now() + '-' + path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_') + ext;
-        cb(null, cleanName);
-    }
-});
-const upload = multer({ storage });
+const BOTS_DIR = path.join(__dirname, 'bots');
+const DATA_FILE = path.join(__dirname, 'bots_data.json');
 
-const runningProcesses = new Map();
+if (!fs.existsSync(BOTS_DIR)) fs.mkdirSync(BOTS_DIR, { recursive: true });
+if (!fs.existsSync(DATA_FILE)) fs.writeFileSync(DATA_FILE, JSON.stringify([]));
+
+let runningProcesses = {};
+
+// পাইথনের সাধারণ বিল্ট-ইন মডিউল (এগুলো pip দিয়ে ইন্সটল করা লাগে না)
+const PYTHON_BUILTINS = new Set([
+    'os', 'sys', 'time', 'json', 're', 'math', 'asyncio', 'logging', 'typing',
+    'random', 'datetime', 'subprocess', 'threading', 'collections', 'shutil',
+    'tempfile', 'urllib', 'base64', 'hashlib', 'uuid', 'io', 'socket', 'ssl',
+    'http', 'html', 'sqlite3', 'csv', 'pathlib', 'functools', 'itertools', 'traceback'
+]);
+
+// পাইথন ইমপোর্ট এবং আসল pip প্যাকেজের সঠিক ম্যাপিং
+const PACKAGE_MAP = {
+    'telebot': 'pyTelegramBotAPI',
+    'emoji': 'emoji',
+    'telegram': 'python-telegram-bot',
+    'bs4': 'beautifulsoup4',
+    'cv2': 'opencv-python',
+    'PIL': 'Pillow',
+    'yaml': 'pyyaml',
+    'dotenv': 'python-dotenv',
+    'telethon': 'telethon',
+    'pyrogram': 'pyrogram tgcrypto',
+    'aiogram': 'aiogram',
+    'google': 'google-api-python-client'
+};
+
+// কোড থেকে স্বয়ংক্রিয়ভাবে লাইব্রেরি ডিটেক্ট ও ইনস্টল করার ফাংশন
+function autoInstallPythonDeps(code) {
+    return new Promise((resolve) => {
+        const importRegex = /(?:^|\n)\s*(?:import|from)\s+([a-zA-Z0-9_]+)/g;
+        let match;
+        const requiredLibs = new Set();
+
+        while ((match = importRegex.exec(code)) !== null) {
+            const mod = match[1].trim();
+            if (!PYTHON_BUILTINS.has(mod)) {
+                const pkg = PACKAGE_MAP[mod] || mod;
+                requiredLibs.add(pkg);
+            }
+        }
+
+        if (requiredLibs.size === 0) return resolve();
+
+        const installCmd = `pip3 install --no-cache-dir ${Array.from(requiredLibs).join(' ')} || pip install --no-cache-dir ${Array.from(requiredLibs).join(' ')}`;
+        console.log(`[Auto-Installer] প্যাকেজ ইনস্টল করা হচ্ছে: ${Array.from(requiredLibs).join(', ')}`);
+        
+        exec(installCmd, (err, stdout, stderr) => {
+            if (err) {
+                console.warn(`[Auto-Installer Warning]: ${stderr || err.message}`);
+            } else {
+                console.log(`[Auto-Installer Success] ডিপেন্ডেন্সি রেডি!`);
+            }
+            resolve();
+        });
+    });
+}
 
 function getBots() {
     try {
-        return JSON.parse(fs.readFileSync(DB_FILE));
-    } catch {
+        return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    } catch (e) {
         return [];
     }
 }
 
-function saveBots(data) {
-    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+function saveBots(bots) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(bots, null, 2));
 }
 
-// ইউনিভার্সাল বট লঞ্চার
-function launchBot(bot) {
-    if (runningProcesses.has(bot.id)) {
-        try { runningProcesses.get(bot.id).kill(); } catch (e) {}
+// বট চালু করার ফাংশন
+async function startBot(bot) {
+    if (runningProcesses[bot.id]) {
+        try { runningProcesses[bot.id].kill('SIGKILL'); } catch (e) {}
     }
-
-    console.log(`[STARTING] ${bot.name} (${bot.filename}) চালু করা হচ্ছে...`);
-    const filePath = path.join(BOTS_DIR, bot.filename);
-
-    if (!fs.existsSync(filePath)) {
-        console.error(`[ERROR] ফাইল পাওয়া যায়নি: ${bot.filename}`);
-        return;
-    }
-
-    let runner = bot.filename.endsWith('.py') ? 'python3' : 'node';
-
-    const processInstance = spawn(runner, [filePath], {
-        env: { ...process.env, BOT_TOKEN: bot.token }
-    });
-
-    runningProcesses.set(bot.id, processInstance);
-
-    processInstance.stdout.on('data', (data) => console.log(`[${bot.name}]: ${data.toString()}`));
-    processInstance.stderr.on('data', (data) => console.error(`[${bot.name} ERROR]: ${data.toString()}`));
-
-    processInstance.on('close', (code) => {
-        console.log(`[${bot.name}] বন্ধ হয়েছিল! ৫ সেকেন্ড পর রিস্টার্ট হচ্ছে...`);
-        setTimeout(() => {
-            const bots = getBots();
-            const exists = bots.find(b => b.id === bot.id);
-            if (exists) launchBot(bot);
-        }, 5000);
-    });
-}
-
-// UptimeRobot Keep-Alive
-app.get('/ping', (req, res) => res.send('Active 24/7!'));
-
-// চলমান সব বটের লিস্ট
-app.get('/api/bots', (req, res) => {
-    const bots = getBots().map(b => ({
-        id: b.id,
-        name: b.name,
-        filename: b.filename,
-        token: b.token,
-        createdAt: b.createdAt,
-        type: b.filename.endsWith('.py') ? 'Python' : 'Node.js',
-        status: runningProcesses.has(b.id) ? 'Active' : 'Restarting'
-    }));
-    res.json(bots);
-});
-
-// নির্দিষ্ট একটি বটের সম্পূর্ণ ডাটা ও কোড পাওয়ার API
-app.get('/api/bots/:id', (req, res) => {
-    const bot = getBots().find(b => b.id === req.params.id);
-    if (!bot) return res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
 
     const filePath = path.join(BOTS_DIR, bot.filename);
-    let code = '';
-    if (fs.existsSync(filePath)) {
-        code = fs.readFileSync(filePath, 'utf-8');
-    }
+    if (!fs.existsSync(filePath)) return;
 
-    res.json({
-        id: bot.id,
-        name: bot.name,
-        token: bot.token,
-        filename: bot.filename,
-        code: code
-    });
-});
+    const env = { ...process.env, BOT_TOKEN: bot.token, TOKEN: bot.token };
 
-// নতুন বট আপলোড
-app.post('/api/upload', upload.single('botFile'), (req, res) => {
-    const { botName, botToken, botCode, codeType } = req.body;
-    let filename = '';
+    if (bot.type === 'python') {
+        const code = fs.readFileSync(filePath, 'utf8');
+        await autoInstallPythonDeps(code);
+        
+        const proc = spawn('python3', [filePath], { env });
+        runningProcesses[bot.id] = proc;
 
-    if (req.file) {
-        filename = req.file.filename;
-    } else if (botCode && botCode.trim() !== '') {
-        const ext = codeType === 'python' ? '.py' : '.js';
-        filename = Date.now() + '-bot' + ext;
-        fs.writeFileSync(path.join(BOTS_DIR, filename), botCode);
+        proc.stdout.on('data', (d) => console.log(`[${bot.name}] ${d}`));
+        proc.stderr.on('data', (d) => console.error(`[${bot.name} ERROR] ${d}`));
     } else {
-        return res.status(400).json({ error: 'ফাইল আপলোড করুন অথবা কোড লিখুন!' });
+        const proc = spawn('node', [filePath], { env });
+        runningProcesses[bot.id] = proc;
+
+        proc.stdout.on('data', (d) => console.log(`[${bot.name}] ${d}`));
+        proc.stderr.on('data', (d) => console.error(`[${bot.name} ERROR] ${d}`));
     }
+}
 
-    if (!botName || !botToken) {
-        return res.status(400).json({ error: 'বটের নাম ও টোকেন আবশ্যক!' });
-    }
+const upload = multer({ dest: 'uploads/' });
 
-    const newBot = {
-        id: Date.now().toString(),
-        name: botName.trim(),
-        token: botToken.trim(),
-        filename: filename,
-        createdAt: new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' })
-    };
+// API: লিস্ট
+app.get('/api/bots', (req, res) => {
+    res.json(getBots());
+});
 
+// API: সিঙ্গেল বট
+app.get('/api/bots/:id', (req, res) => {
     const bots = getBots();
-    bots.push(newBot);
-    saveBots(bots);
+    const bot = bots.find(b => b.id === req.params.id);
+    if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
-    launchBot(newBot);
-
-    res.json({ success: true, message: `${botName} সফলভাবে লাইভ হয়েছে!` });
+    const filePath = path.join(BOTS_DIR, bot.filename);
+    const code = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+    res.json({ ...bot, code });
 });
 
-// রানিং বটের কোড এবং টোকেন এডিট ও সাথে সাথে রিস্টার্ট করার API
-app.post('/api/bots/:id/edit', (req, res) => {
-    const { botName, botToken, botCode } = req.body;
-    const { id } = req.params;
+// API: আপলোড
+app.post('/api/upload', upload.single('botFile'), async (req, res) => {
+    try {
+        const { botName, botToken, botCode, codeType } = req.body;
+        const id = Date.now().toString();
+        const ext = (req.file ? path.extname(req.file.originalname) : (codeType === 'javascript' ? '.js' : '.py')).toLowerCase();
+        const filename = `${id}${ext}`;
+        const targetPath = path.join(BOTS_DIR, filename);
 
-    let bots = getBots();
-    const index = bots.findIndex(b => b.id === id);
+        if (req.file) {
+            fs.renameSync(req.file.path, targetPath);
+        } else if (botCode) {
+            fs.writeFileSync(targetPath, botCode);
+        } else {
+            return res.status(400).json({ error: 'কোড অথবা ফাইল প্রদান করুন।' });
+        }
 
-    if (index === -1) return res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
+        const newBot = {
+            id,
+            name: botName,
+            token: botToken,
+            filename,
+            type: ext === '.js' ? 'javascript' : 'python',
+            createdAt: new Date().toLocaleString('bn-BD')
+        };
 
-    // তথ্য আপডেট করা
-    bots[index].name = botName.trim();
-    bots[index].token = botToken.trim();
-    saveBots(bots);
+        const bots = getBots();
+        bots.push(newBot);
+        saveBots(bots);
 
-    // কোড ফাইল ওভাররাইট করা
-    const filePath = path.join(BOTS_DIR, bots[index].filename);
-    fs.writeFileSync(filePath, botCode, 'utf-8');
+        await startBot(newBot);
 
-    // নতুন কোড ও টোকেন দিয়ে তৎক্ষণাৎ রিস্টার্ট দেওয়া
-    launchBot(bots[index]);
-
-    res.json({ success: true, message: 'বট সফলভাবে আপডেট ও নতুন করে রান হয়েছে!' });
+        res.json({ success: true, message: 'বট সফলভাবে হোস্ট ও চালু হয়েছে!' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// বট ডিলিট
+// API: এডিট
+app.post('/api/bots/:id/edit', async (req, res) => {
+    try {
+        const { botName, botToken, botCode } = req.body;
+        const bots = getBots();
+        const botIndex = bots.findIndex(b => b.id === req.params.id);
+
+        if (botIndex === -1) return res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
+
+        bots[botIndex].name = botName;
+        bots[botIndex].token = botToken;
+        saveBots(bots);
+
+        const filePath = path.join(BOTS_DIR, bots[botIndex].filename);
+        fs.writeFileSync(filePath, botCode);
+
+        await startBot(bots[botIndex]);
+
+        res.json({ success: true, message: 'বট সফলভাবে আপডেট ও রিস্টার্ট হয়েছে!' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API: ডিলিট
 app.delete('/api/bots/:id', (req, res) => {
-    const { id } = req.params;
-    let bots = getBots();
-    const bot = bots.find(b => b.id === id);
+    const bots = getBots();
+    const bot = bots.find(b => b.id === req.params.id);
 
     if (bot) {
-        if (runningProcesses.has(id)) {
-            runningProcesses.get(id).kill();
-            runningProcesses.delete(id);
+        if (runningProcesses[bot.id]) {
+            try { runningProcesses[bot.id].kill('SIGKILL'); } catch (e) {}
+            delete runningProcesses[bot.id];
         }
         const filePath = path.join(BOTS_DIR, bot.filename);
         if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
-        bots = bots.filter(b => b.id !== id);
-        saveBots(bots);
-        return res.json({ success: true });
+        saveBots(bots.filter(b => b.id !== req.params.id));
     }
-    res.status(404).json({ error: 'বট পাওয়া যায়নি!' });
+    res.json({ success: true });
 });
 
+// সার্ভার স্টার্ট
 app.listen(PORT, () => {
-    console.log(`🚀 ইউনিভার্সাল এডিটেবল সার্ভার চালু হয়েছে পোর্ট: ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
     const bots = getBots();
-    bots.forEach(bot => launchBot(bot));
+    bots.forEach(b => startBot(b));
 });
