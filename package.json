@@ -1,10 +1,10 @@
 {
   "name": "render-bot-hoster",
-  "version": "1.0.0",
-  "description": "Universal Multi-Bot Hosting Platform (Node.js & Python)",
+  "version": "2.0.0",
+  "description": "Universal Multi-Bot Hosting Platform with Auto-Dependency Installer",
   "main": "server.js",
   "scripts": {
-    "postinstall": "pip3 install --break-system-packages python-telegram-bot httpx pyotp || pip install --break-system-packages python-telegram-bot httpx pyotp",
+    "postinstall": "pip3 install --no-cache-dir -r requirements.txt || pip install --no-cache-dir -r requirements.txt || true",
     "start": "node server.js"
   },
   "dependencies": {
