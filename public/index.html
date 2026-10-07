@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Bot Hosting & Live Editor</title>
+    <title>Universal Multi-Bot Hosting & Live Editor</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
@@ -12,15 +12,15 @@
 <div class="max-w-4xl mx-auto space-y-6">
 
     <!-- Top Header -->
-    <div class="flex items-center justify-between bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+    <div class="flex flex-col md:flex-row md:items-center justify-between bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg gap-4">
         <div>
             <h1 class="text-2xl font-bold text-sky-400 flex items-center gap-2">
-                <i class="fa-solid fa-robot"></i> 24/7 বট হোস্টিং ও লাইভ এডিটর
+                <i class="fa-solid fa-robot"></i> 24/7 ইউনিভার্সাল বট হোস্টিং
             </h1>
-            <p class="text-xs text-slate-400 mt-1">রানিং বটের কোড ও টোকেন যেকোনো সময় লাইভ এডিট করুন</p>
+            <p class="text-xs text-slate-400 mt-1">Python ও Node.js-এর যেকোনো ফ্রেমওয়ার্ক (Aiogram, Telethon, Pyrogram, PTB) ফুল সাপোর্ট</p>
         </div>
-        <div class="flex items-center gap-2 bg-emerald-950 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-800">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> সার্ভার অনলাইন
+        <div class="flex items-center gap-2 bg-emerald-950 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-800 w-fit">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> অটো-ডিপেন্ডেন্সি ইন্সটলার অন
         </div>
     </div>
 
@@ -35,7 +35,7 @@
             <form id="uploadForm" class="space-y-4">
                 <div>
                     <label class="text-xs font-medium text-slate-300">বটের নাম</label>
-                    <input type="text" id="botName" placeholder="যেমন: OTP Guru Bot" required
+                    <input type="text" id="botName" placeholder="যেমন: Multi Tool Bot" required
                            class="w-full mt-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500">
                 </div>
 
@@ -63,7 +63,7 @@
                 </div>
 
                 <div>
-                    <textarea id="botCode" rows="4" placeholder="# এখানে পাইথন বা জাভাস্ক্রিপ্ট কোড পেস্ট করতে পারেন..."
+                    <textarea id="botCode" rows="4" placeholder="# এখানে যেকোনো লাইব্রেরির পাইথন বা জাভাস্ক্রিপ্ট কোড পেস্ট করুন..."
                               class="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono focus:outline-none focus:border-sky-500"></textarea>
                 </div>
 
@@ -94,7 +94,7 @@
     <div class="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
         <div class="p-4 border-b border-slate-700 flex justify-between items-center">
             <h3 class="font-bold text-sky-400 flex items-center gap-2">
-                <i class="fa-solid fa-pen-to-square"></i> বটের কোড ও টোকেন এডিটর
+                <i class="fa-solid fa-pen-to-square"></i> বটের কোড ও লাইভ এডিটর
             </h3>
             <button onclick="closeEditModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
         </div>
@@ -116,7 +116,7 @@
 
             <div>
                 <label class="text-xs font-semibold text-slate-300 flex justify-between">
-                    <span>বটের সম্পূর্ণ কোড (Live Code Editor)</span>
+                    <span>বটের কোড (যেকোনো লাইব্রেরী ইম্পোর্ট করতে পারেন)</span>
                     <span id="editBotFilename" class="text-[10px] text-sky-400 font-mono"></span>
                 </label>
                 <textarea id="editBotCode" rows="14" required
@@ -170,12 +170,11 @@
         `).join('');
     }
 
-    // নতুন বট আপলোড
     document.getElementById('uploadForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> আপলোড হচ্ছে...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ডিপেন্ডেন্সি চেক ও আপলোড হচ্ছে...';
 
         const formData = new FormData();
         formData.append('botName', document.getElementById('botName').value);
@@ -186,22 +185,25 @@
         formData.append('botCode', document.getElementById('botCode').value);
         formData.append('codeType', document.querySelector('input[name="codeType"]:checked').value);
 
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
-        const result = await res.json();
+        try {
+            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+            const result = await res.json();
 
-        if (result.success) {
-            alert(result.message);
-            document.getElementById('uploadForm').reset();
-            loadBots();
-        } else {
-            alert(result.error || 'সমস্যা হয়েছে!');
+            if (result.success) {
+                alert(result.message);
+                document.getElementById('uploadForm').reset();
+                loadBots();
+            } else {
+                alert(result.error || 'সমস্যা হয়েছে!');
+            }
+        } catch (err) {
+            alert('সার্ভার এরর: ' + err.message);
         }
 
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-play"></i> হোস্ট ও রান করুন';
     });
 
-    // এডিট মোডাল ওপেন
     async function openEditModal(id) {
         const res = await fetch('/api/bots/' + id);
         const bot = await res.json();
@@ -226,13 +228,12 @@
         document.getElementById('editModal').classList.remove('flex');
     }
 
-    // এডিট সেভ হ্যান্ডলার
     document.getElementById('editForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('editBotId').value;
         const btn = document.getElementById('saveEditBtn');
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> সেভ হচ্ছে...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> ডিপেন্ডেন্সি ইনস্টল ও সেভ হচ্ছে...';
 
         const payload = {
             botName: document.getElementById('editBotName').value,
@@ -240,26 +241,29 @@
             botCode: document.getElementById('editBotCode').value
         };
 
-        const res = await fetch('/api/bots/' + id + '/edit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const result = await res.json();
+        try {
+            const res = await fetch('/api/bots/' + id + '/edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
 
-        if (result.success) {
-            alert(result.message);
-            closeEditModal();
-            loadBots();
-        } else {
-            alert(result.error || 'সমস্যা হয়েছে!');
+            if (result.success) {
+                alert(result.message);
+                closeEditModal();
+                loadBots();
+            } else {
+                alert(result.error || 'সমস্যা হয়েছে!');
+            }
+        } catch (err) {
+            alert('সার্ভার এরর: ' + err.message);
         }
 
         btn.disabled = false;
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> পরিবর্তন সেভ ও রিস্টার্ট করুন';
     });
 
-    // বট ডিলিট
     async function deleteBot(id) {
         if (!confirm('আপনি কি এই বটটি বন্ধ ও ডিলিট করতে চান?')) return;
         await fetch('/api/bots/' + id, { method: 'DELETE' });
